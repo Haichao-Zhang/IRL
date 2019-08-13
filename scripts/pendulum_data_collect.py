@@ -6,9 +6,11 @@ from rllab.envs.gym_env import GymEnv
 
 from inverse_rl.utils.log_utils import rllab_logdir
 
+
 def main():
     env = TfEnv(GymEnv('Pendulum-v0', record_video=False, record_log=False))
-    policy = GaussianMLPPolicy(name='policy', env_spec=env.spec, hidden_sizes=(32, 32))
+    policy = GaussianMLPPolicy(
+        name='policy', env_spec=env.spec, hidden_sizes=(32, 32))
     algo = TRPO(
         env=env,
         policy=policy,
@@ -17,11 +19,13 @@ def main():
         max_path_length=100,
         discount=0.99,
         store_paths=True,
+        entropy_weight=1,
         baseline=LinearFeatureBaseline(env_spec=env.spec)
     )
 
     with rllab_logdir(algo=algo, dirname='data/pendulum'):
         algo.train()
+
 
 if __name__ == "__main__":
     main()

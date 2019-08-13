@@ -10,6 +10,7 @@ import numpy as np
 
 from inverse_rl.utils.hyperparametrized import extract_hyperparams
 
+
 @contextlib.contextmanager
 def rllab_logdir(algo=None, dirname=None):
     if dirname:
