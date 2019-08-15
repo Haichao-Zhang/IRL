@@ -41,7 +41,7 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
             sampler_cls=None,
             sampler_args=None,
             force_batch_sampler=False,
-            init_pol_params = None,
+            init_pol_params=None,
             irl_model=None,
             irl_model_wt=1.0,
             discrim_train_itrs=10,
@@ -142,14 +142,15 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
             for path in paths:
                 tot_rew += np.sum(path['rewards'])
                 path['rewards'] *= 0
-            logger.record_tabular('OriginalTaskAverageReturn', tot_rew/float(len(paths)))
+            logger.record_tabular(
+                'OriginalTaskAverageReturn', tot_rew/float(len(paths)))
 
-        if self.irl_model_wt <=0:
+        if self.irl_model_wt <= 0:
             return paths
 
         if self.train_irl:
             max_itrs = self.discrim_train_itrs
-            lr=1e-3
+            lr = 1e-3
             mean_loss = self.irl_model.fit(paths, policy=self.policy, itr=itr, max_itrs=max_itrs, lr=lr,
                                            logger=logger)
 
@@ -161,7 +162,6 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
         logger.record_tabular('IRLRewardMean', np.mean(probs))
         logger.record_tabular('IRLRewardMax', np.max(probs))
         logger.record_tabular('IRLRewardMin', np.min(probs))
-
 
         if self.irl_model.score_trajectories:
             # TODO: should I add to reward here or after advantage computation?
@@ -199,7 +199,8 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
                 logger.log("Optimizing policy...")
                 self.optimize_policy(itr, samples_data)
                 logger.log("Saving snapshot...")
-                params = self.get_itr_snapshot(itr, samples_data)  # , **kwargs)
+                params = self.get_itr_snapshot(
+                    itr, samples_data)  # , **kwargs)
                 if self.store_paths:
                     params["paths"] = samples_data["paths"]
                 logger.save_itr_params(itr, params)
@@ -213,7 +214,7 @@ class IRLBatchPolopt(RLAlgorithm, metaclass=Hyperparametrized):
                         input("Plotting evaluation run: Press Enter to "
                               "continue...")
         self.shutdown_worker()
-        return 
+        return
 
     def log_diagnostics(self, paths):
         self.env.log_diagnostics(paths)

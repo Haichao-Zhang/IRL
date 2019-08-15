@@ -10,13 +10,15 @@ from inverse_rl.algos.irl_trpo import IRLTRPO
 from inverse_rl.models.imitation_learning import GAIL
 from inverse_rl.utils.log_utils import rllab_logdir, load_latest_experts
 
+
 def main():
     env = TfEnv(GymEnv('Pendulum-v0', record_video=False, record_log=False))
-    
+
     experts = load_latest_experts('data/pendulum', n=5)
 
     irl_model = GAIL(env_spec=env.spec, expert_trajs=experts)
-    policy = GaussianMLPPolicy(name='policy', env_spec=env.spec, hidden_sizes=(32, 32))
+    policy = GaussianMLPPolicy(
+        name='policy', env_spec=env.spec, hidden_sizes=(32, 32))
     algo = IRLTRPO(
         env=env,
         policy=policy,
@@ -28,7 +30,7 @@ def main():
         store_paths=True,
         discrim_train_itrs=50,
         irl_model_wt=1.0,
-        entropy_weight=0.0, # GAIL should not use entropy unless for exploration
+        entropy_weight=0.0,  # GAIL should not use entropy unless for exploration
         zero_environment_reward=True,
         baseline=LinearFeatureBaseline(env_spec=env.spec)
     )
@@ -36,6 +38,7 @@ def main():
     with rllab_logdir(algo=algo, dirname='data/pendulum_gail'):
         with tf.Session():
             algo.train()
+
 
 if __name__ == "__main__":
     main()

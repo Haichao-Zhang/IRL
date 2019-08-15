@@ -56,30 +56,37 @@ class IRLNPO(IRLBatchPolopt):
         dist = self.policy.distribution
 
         old_dist_info_vars = {
-            k: tf.placeholder(tf.float32, shape=[None] * (1 + is_recurrent) + list(shape), name='old_%s' % k)
+            k: tf.placeholder(tf.float32, shape=[
+                              None] * (1 + is_recurrent) + list(shape), name='old_%s' % k)
             for k, shape in dist.dist_info_specs
-            }
-        old_dist_info_vars_list = [old_dist_info_vars[k] for k in dist.dist_info_keys]
+        }
+        old_dist_info_vars_list = [old_dist_info_vars[k]
+                                   for k in dist.dist_info_keys]
 
         state_info_vars = {
-            k: tf.placeholder(tf.float32, shape=[None] * (1 + is_recurrent) + list(shape), name=k)
+            k: tf.placeholder(tf.float32, shape=[
+                              None] * (1 + is_recurrent) + list(shape), name=k)
             for k, shape in self.policy.state_info_specs
-            }
-        state_info_vars_list = [state_info_vars[k] for k in self.policy.state_info_keys]
+        }
+        state_info_vars_list = [state_info_vars[k]
+                                for k in self.policy.state_info_keys]
 
         if is_recurrent:
-            valid_var = tf.placeholder(tf.float32, shape=[None, None], name="valid")
+            valid_var = tf.placeholder(
+                tf.float32, shape=[None, None], name="valid")
         else:
             valid_var = None
 
         dist_info_vars = self.policy.dist_info_sym(obs_var, state_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
-        lr = dist.likelihood_ratio_sym(action_var, old_dist_info_vars, dist_info_vars)
+        lr = dist.likelihood_ratio_sym(
+            action_var, old_dist_info_vars, dist_info_vars)
 
         if self.pol_ent_wt > 0:
             if 'log_std' in dist_info_vars:
                 log_std = dist_info_vars['log_std']
-                ent = tf.reduce_sum(log_std + tf.log(tf.sqrt(2 * np.pi * np.e)), reduction_indices=-1)
+                ent = tf.reduce_sum(
+                    log_std + tf.log(tf.sqrt(2 * np.pi * np.e)), reduction_indices=-1)
             elif 'prob' in dist_info_vars:
                 prob = dist_info_vars['prob']
                 ent = -tf.reduce_sum(prob*tf.log(prob), reduction_indices=-1)
@@ -90,10 +97,10 @@ class IRLNPO(IRLBatchPolopt):
         else:
             adv = advantage_var
 
-
         if is_recurrent:
             mean_kl = tf.reduce_sum(kl * valid_var) / tf.reduce_sum(valid_var)
-            surr_loss = - tf.reduce_sum(lr * adv * valid_var) / tf.reduce_sum(valid_var)
+            surr_loss = - tf.reduce_sum(lr * adv *
+                                        valid_var) / tf.reduce_sum(valid_var)
         else:
             mean_kl = tf.reduce_mean(kl)
             surr_loss = - tf.reduce_mean(lr * adv)
@@ -120,7 +127,8 @@ class IRLNPO(IRLBatchPolopt):
 
         agent_infos = samples_data["agent_infos"]
         state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
-        dist_info_list = [agent_infos[k] for k in self.policy.distribution.dist_info_keys]
+        dist_info_list = [agent_infos[k]
+                          for k in self.policy.distribution.dist_info_keys]
         all_input_values += tuple(state_info_list) + tuple(dist_info_list)
         if self.policy.recurrent:
             all_input_values += (samples_data["valids"],)

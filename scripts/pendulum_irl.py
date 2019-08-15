@@ -16,8 +16,8 @@ def main():
 
     experts = load_latest_experts('data/pendulum', n=5)
 
-    import pdb
-    pdb.set_trace()
+    #import pdb
+    # pdb.set_trace()
 
     irl_model = AIRLStateAction(env_spec=env.spec, expert_trajs=experts)
     policy = GaussianMLPPolicy(

@@ -19,7 +19,7 @@ def main():
         max_path_length=100,
         discount=0.99,
         store_paths=True,
-        entropy_weight=1,
+        entropy_weight=1.0,
         baseline=LinearFeatureBaseline(env_spec=env.spec)
     )
 

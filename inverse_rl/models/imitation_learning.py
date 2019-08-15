@@ -268,7 +268,7 @@ class GAIL(SingleTimestepIRL):
 
 class AIRLStateAction(SingleTimestepIRL):
     """
-    This version consumes single timesteps. 
+    This version consumes single timesteps.
     """
     def __init__(self, env_spec, expert_trajs=None,
                  discrim_arch=relu_net,
@@ -373,7 +373,7 @@ class AIRLStateAction(SingleTimestepIRL):
 
         energy  = tf.get_default_session().run(self.energy,
                                                     feed_dict={self.act_t: acts, self.obs_t: obs})
-        energy = -energy[:,0] 
+        energy = -energy[:,0]
         return self.unpack(energy, paths)
 
 
@@ -415,7 +415,7 @@ class GAN_GCL(TrajectoryIRL):
                 self.energy = discrim_arch(obs_act, **discrim_arch_args)
                 discrim_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=vs2.name)
 
-            self.energy_timestep = self.energy 
+            self.energy_timestep = self.energy
             # Don't train separate log Z because we can't fully separate it from the energy function
             if discount >= 1.0:
                 log_p_tau = tf.reduce_sum(-self.energy, axis=1)
