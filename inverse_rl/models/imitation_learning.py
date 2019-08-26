@@ -7,11 +7,12 @@ from inverse_rl.utils.general import TrainingIterator
 from inverse_rl.utils.hyperparametrized import Hyperparametrized
 from inverse_rl.utils.math_utils import gauss_log_pdf, categorical_log_pdf
 from sandbox.rocky.tf.misc import tensor_utils
-from inverse_rl.utils.ot import IPOT_distance2
+from inverse_rl.utils.ot import IPOT_distance, IPOT_distance2
 
 LOG_REG = 1e-8
 DIST_GAUSSIAN = 'gaussian'
 DIST_CATEGORICAL = 'categorical'
+
 
 class ImitationLearning(object, metaclass=Hyperparametrized):
     def __init__(self):
@@ -45,11 +46,14 @@ class ImitationLearning(object, metaclass=Hyperparametrized):
         Npath = len(paths)
         actions = [path['actions'] for path in paths]
         if pol_dist_type == DIST_GAUSSIAN:
-            params = [(path['agent_infos']['mean'], path['agent_infos']['log_std']) for path in paths]
-            path_probs = [gauss_log_pdf(params[i], actions[i]) for i in range(Npath)]
+            params = [(path['agent_infos']['mean'],
+                       path['agent_infos']['log_std']) for path in paths]
+            path_probs = [gauss_log_pdf(params[i], actions[i])
+                          for i in range(Npath)]
         elif pol_dist_type == DIST_CATEGORICAL:
             params = [(path['agent_infos']['prob'],) for path in paths]
-            path_probs = [categorical_log_pdf(params[i], actions[i]) for i in range(Npath)]
+            path_probs = [categorical_log_pdf(
+                params[i], actions[i]) for i in range(Npath)]
         else:
             raise NotImplementedError("Unknown distribution type")
 
@@ -66,8 +70,10 @@ class ImitationLearning(object, metaclass=Hyperparametrized):
                 continue
             nobs = path['observations'][1:]
             nact = path['actions'][1:]
-            nobs = np.r_[nobs, pad_val*np.expand_dims(np.ones_like(nobs[0]), axis=0)]
-            nact = np.r_[nact, pad_val*np.expand_dims(np.ones_like(nact[0]), axis=0)]
+            nobs = np.r_[nobs, pad_val *
+                         np.expand_dims(np.ones_like(nobs[0]), axis=0)]
+            nact = np.r_[nact, pad_val *
+                         np.expand_dims(np.ones_like(nact[0]), axis=0)]
             path['observations_next'] = nobs
             path['actions_next'] = nact
         return paths
@@ -82,7 +88,8 @@ class ImitationLearning(object, metaclass=Hyperparametrized):
     @staticmethod
     def sample_batch(*args, batch_size=32):
         N = args[0].shape[0]
-        batch_idxs = np.random.randint(0, N, batch_size)  # trajectories are negatives
+        # trajectories are negatives
+        batch_idxs = np.random.randint(0, N, batch_size)
         return [data[batch_idxs] for data in args]
 
     def fit(self, paths, **kwargs):
@@ -92,13 +99,16 @@ class ImitationLearning(object, metaclass=Hyperparametrized):
         raise NotImplementedError()
 
     def _make_param_ops(self, vs):
-        self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=vs.name)
-        assert len(self._params)>0
-        self._assign_plc = [tf.placeholder(tf.float32, shape=param.get_shape(), name='assign_%s'%param.name.replace('/','_').replace(':','_')) for param in self._params]
-        self._assign_ops = [tf.assign(self._params[i], self._assign_plc[i]) for i in range(len(self._params))]
+        self._params = tf.get_collection(
+            tf.GraphKeys.TRAINABLE_VARIABLES, scope=vs.name)
+        assert len(self._params) > 0
+        self._assign_plc = [tf.placeholder(tf.float32, shape=param.get_shape(
+        ), name='assign_%s' % param.name.replace('/', '_').replace(':', '_')) for param in self._params]
+        self._assign_ops = [tf.assign(
+            self._params[i], self._assign_plc[i]) for i in range(len(self._params))]
 
     def get_params(self):
-        params =  tf.get_default_session().run(self._params)
+        params = tf.get_default_session().run(self._params)
         assert len(params) == len(self._params)
         return params
 
@@ -122,15 +132,19 @@ class TrajectoryIRL(ImitationLearning):
         """
         if policy.recurrent:
             policy.reset([True]*len(expert_paths))
-            expert_obs = self.extract_paths(expert_paths, keys=('observations',))[0]
+            expert_obs = self.extract_paths(
+                expert_paths, keys=('observations',))[0]
             agent_infos = []
             for t in range(expert_obs.shape[1]):
                 a, infos = policy.get_actions(expert_obs[:, t])
                 agent_infos.append(infos)
-            agent_infos_stack = tensor_utils.stack_tensor_dict_list(agent_infos)
+            agent_infos_stack = tensor_utils.stack_tensor_dict_list(
+                agent_infos)
             for key in agent_infos_stack:
-                agent_infos_stack[key] = np.transpose(agent_infos_stack[key], axes=[1,0,2])
-            agent_infos_transpose = tensor_utils.split_tensor_dict_list(agent_infos_stack)
+                agent_infos_stack[key] = np.transpose(
+                    agent_infos_stack[key], axes=[1, 0, 2])
+            agent_infos_transpose = tensor_utils.split_tensor_dict_list(
+                agent_infos_stack)
             for i, path in enumerate(expert_paths):
                 path['agent_infos'] = agent_infos_transpose[i]
         else:
@@ -138,7 +152,6 @@ class TrajectoryIRL(ImitationLearning):
                 actions, agent_infos = policy.get_actions(path['observations'])
                 path['agent_infos'] = agent_infos
         return self._compute_path_probs(expert_paths, insert=insert)
-
 
 
 class SingleTimestepIRL(ImitationLearning):
@@ -177,15 +190,19 @@ class SingleTimestepIRL(ImitationLearning):
             return self._compute_path_probs(expert_paths, insert=insert)
         elif hasattr(policy, 'recurrent') and policy.recurrent:
             policy.reset([True]*len(expert_paths))
-            expert_obs = self.extract_paths(expert_paths, keys=('observations',), stack=True)[0]
+            expert_obs = self.extract_paths(
+                expert_paths, keys=('observations',), stack=True)[0]
             agent_infos = []
             for t in range(expert_obs.shape[1]):
                 a, infos = policy.get_actions(expert_obs[:, t])
                 agent_infos.append(infos)
-            agent_infos_stack = tensor_utils.stack_tensor_dict_list(agent_infos)
+            agent_infos_stack = tensor_utils.stack_tensor_dict_list(
+                agent_infos)
             for key in agent_infos_stack:
-                agent_infos_stack[key] = np.transpose(agent_infos_stack[key], axes=[1,0,2])
-            agent_infos_transpose = tensor_utils.split_tensor_dict_list(agent_infos_stack)
+                agent_infos_stack[key] = np.transpose(
+                    agent_infos_stack[key], axes=[1, 0, 2])
+            agent_infos_transpose = tensor_utils.split_tensor_dict_list(
+                agent_infos_stack)
             for i, path in enumerate(expert_paths):
                 path['agent_infos'] = agent_infos_transpose[i]
         else:
@@ -202,6 +219,7 @@ class GAIL(SingleTimestepIRL):
 
     This version consumes single timesteps.
     """
+
     def __init__(self, env_spec, expert_trajs=None,
                  discrim_arch=relu_net,
                  discrim_arch_args={},
@@ -214,18 +232,21 @@ class GAIL(SingleTimestepIRL):
         # build energy model
         with tf.variable_scope(name) as vs:
             # Should be batch_size x T x dO/dU
-            self.obs_t = tf.placeholder(tf.float32, [None, self.dO], name='obs')
-            self.act_t = tf.placeholder(tf.float32, [None, self.dU], name='act')
+            self.obs_t = tf.placeholder(
+                tf.float32, [None, self.dO], name='obs')
+            self.act_t = tf.placeholder(
+                tf.float32, [None, self.dU], name='act')
             self.labels = tf.placeholder(tf.float32, [None, 1], name='labels')
             self.lr = tf.placeholder(tf.float32, (), name='lr')
 
             obs_act = tf.concat([self.obs_t, self.act_t], axis=1)
             logits = discrim_arch(obs_act, **discrim_arch_args)
             self.predictions = tf.nn.sigmoid(logits)
-            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits, labels=self.labels))
-            self.step = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
+            self.loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+                logits=logits, labels=self.labels))
+            self.step = tf.train.AdamOptimizer(
+                learning_rate=self.lr).minimize(self.loss)
             self._make_param_ops(vs)
-
 
     def fit(self, trajs, batch_size=32, max_itrs=100, **kwargs):
         obs, acts = self.extract_paths(trajs)
@@ -233,8 +254,10 @@ class GAIL(SingleTimestepIRL):
 
         # Train discriminator
         for it in TrainingIterator(max_itrs, heartbeat=5):
-            obs_batch, act_batch = self.sample_batch(obs, acts, batch_size=batch_size)
-            expert_obs_batch, expert_act_batch = self.sample_batch(expert_obs, expert_acts, batch_size=batch_size)
+            obs_batch, act_batch = self.sample_batch(
+                obs, acts, batch_size=batch_size)
+            expert_obs_batch, expert_act_batch = self.sample_batch(
+                expert_obs, expert_acts, batch_size=batch_size)
             labels = np.zeros((batch_size*2, 1))
             labels[batch_size:] = 1.0
             obs_batch = np.concatenate([obs_batch, expert_obs_batch], axis=0)
@@ -263,7 +286,7 @@ class GAIL(SingleTimestepIRL):
                                               feed_dict={self.act_t: acts, self.obs_t: obs})
 
         # reward = log D(s, a)
-        scores = np.log(scores[:,0]+LOG_REG)
+        scores = np.log(scores[:, 0]+LOG_REG)
         return self.unpack(scores, paths)
 
 
@@ -271,6 +294,7 @@ class AIRLStateAction(SingleTimestepIRL):
     """
     This version consumes single timesteps.
     """
+
     def __init__(self, env_spec, expert_trajs=None,
                  discrim_arch=relu_net,
                  discrim_arch_args={},
@@ -285,10 +309,13 @@ class AIRLStateAction(SingleTimestepIRL):
         # build energy model
         with tf.variable_scope(name) as _vs:
             # Should be batch_size x T x dO/dU
-            self.obs_t = tf.placeholder(tf.float32, [None, self.dO], name='obs')
-            self.act_t = tf.placeholder(tf.float32, [None, self.dU], name='act')
+            self.obs_t = tf.placeholder(
+                tf.float32, [None, self.dO], name='obs')
+            self.act_t = tf.placeholder(
+                tf.float32, [None, self.dU], name='act')
             self.labels = tf.placeholder(tf.float32, [None, 1], name='labels')
-            self.lprobs = tf.placeholder(tf.float32, [None, 1], name='log_probs')
+            self.lprobs = tf.placeholder(
+                tf.float32, [None, 1], name='log_probs')
             self.lr = tf.placeholder(tf.float32, (), name='lr')
 
             obs_act = tf.concat([self.obs_t, self.act_t], axis=1)
@@ -303,25 +330,31 @@ class AIRLStateAction(SingleTimestepIRL):
             log_q_tau = self.lprobs
 
             if l2_reg > 0:
-                reg_loss = l2_reg*tf.reduce_sum([tf.reduce_sum(tf.square(var)) for var in discrim_vars])
+                reg_loss = l2_reg * \
+                    tf.reduce_sum([tf.reduce_sum(tf.square(var))
+                                   for var in discrim_vars])
             else:
                 reg_loss = 0
 
             log_pq = tf.reduce_logsumexp([log_p_tau, log_q_tau], axis=0)
             self.d_tau = tf.exp(log_p_tau-log_pq)
-            cent_loss = -tf.reduce_mean(self.labels*(log_p_tau-log_pq) + (1-self.labels)*(log_q_tau-log_pq))
+            cent_loss = - \
+                tf.reduce_mean(self.labels*(log_p_tau-log_pq) +
+                               (1-self.labels)*(log_q_tau-log_pq))
 
             self.loss = cent_loss + reg_loss
-            self.step = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
+            self.step = tf.train.AdamOptimizer(
+                learning_rate=self.lr).minimize(self.loss)
             self._make_param_ops(_vs)
 
-
-    def fit(self, paths, policy=None, batch_size=32, max_itrs=100, logger=None, lr=1e-3,**kwargs):
+    def fit(self, paths, policy=None, batch_size=32, max_itrs=100, logger=None, lr=1e-3, **kwargs):
         #self._compute_path_probs(paths, insert=True)
         self.eval_expert_probs(paths, policy, insert=True)
         self.eval_expert_probs(self.expert_trajs, policy, insert=True)
-        obs, acts, path_probs = self.extract_paths(paths, keys=('observations', 'actions', 'a_logprobs'))
-        expert_obs, expert_acts, expert_probs = self.extract_paths(self.expert_trajs, keys=('observations', 'actions', 'a_logprobs'))
+        obs, acts, path_probs = self.extract_paths(
+            paths, keys=('observations', 'actions', 'a_logprobs'))
+        expert_obs, expert_acts, expert_probs = self.extract_paths(
+            self.expert_trajs, keys=('observations', 'actions', 'a_logprobs'))
 
         # Train discriminator
         for it in TrainingIterator(max_itrs, heartbeat=5):
@@ -329,13 +362,15 @@ class AIRLStateAction(SingleTimestepIRL):
                 self.sample_batch(obs, acts, path_probs, batch_size=batch_size)
 
             expert_obs_batch, expert_act_batch, expert_lprobs_batch = \
-                self.sample_batch(expert_obs, expert_acts, expert_probs, batch_size=batch_size)
+                self.sample_batch(expert_obs, expert_acts,
+                                  expert_probs, batch_size=batch_size)
 
             labels = np.zeros((batch_size*2, 1))
             labels[batch_size:] = 1.0
             obs_batch = np.concatenate([obs_batch, expert_obs_batch], axis=0)
             act_batch = np.concatenate([act_batch, expert_act_batch], axis=0)
-            lprobs_batch = np.expand_dims(np.concatenate([lprobs_batch, expert_lprobs_batch], axis=0), axis=1).astype(np.float32)
+            lprobs_batch = np.expand_dims(np.concatenate(
+                [lprobs_batch, expert_lprobs_batch], axis=0), axis=1).astype(np.float32)
 
             loss, _ = tf.get_default_session().run([self.loss, self.step], feed_dict={
                 self.act_t: act_batch,
@@ -352,19 +387,20 @@ class AIRLStateAction(SingleTimestepIRL):
                 print('\tLoss:%f' % mean_loss)
         if logger:
             energy = tf.get_default_session().run(self.energy,
-                                                        feed_dict={self.act_t: acts, self.obs_t: obs})
+                                                  feed_dict={self.act_t: acts, self.obs_t: obs})
             logger.record_tabular('IRLAverageEnergy', np.mean(energy))
             logger.record_tabular('IRLAverageLogQtau', np.mean(path_probs))
             logger.record_tabular('IRLMedianLogQtau', np.median(path_probs))
 
             energy = tf.get_default_session().run(self.energy,
-                                                        feed_dict={self.act_t: expert_acts, self.obs_t: expert_obs})
+                                                  feed_dict={self.act_t: expert_acts, self.obs_t: expert_obs})
             logger.record_tabular('IRLAverageExpertEnergy', np.mean(energy))
             #logger.record_tabular('GCLAverageExpertLogPtau', np.mean(-energy-logZ))
-            logger.record_tabular('IRLAverageExpertLogQtau', np.mean(expert_probs))
-            logger.record_tabular('IRLMedianExpertLogQtau', np.median(expert_probs))
+            logger.record_tabular(
+                'IRLAverageExpertLogQtau', np.mean(expert_probs))
+            logger.record_tabular('IRLMedianExpertLogQtau',
+                                  np.median(expert_probs))
         return mean_loss
-
 
     def eval(self, paths, **kwargs):
         """
@@ -372,9 +408,9 @@ class AIRLStateAction(SingleTimestepIRL):
         """
         obs, acts = self.extract_paths(paths)
 
-        energy  = tf.get_default_session().run(self.energy,
-                                                    feed_dict={self.act_t: acts, self.obs_t: obs})
-        energy = -energy[:,0]
+        energy = tf.get_default_session().run(self.energy,
+                                              feed_dict={self.act_t: acts, self.obs_t: obs})
+        energy = -energy[:, 0]
         return self.unpack(energy, paths)
 
 
@@ -386,7 +422,7 @@ class OTIRLStateAction(SingleTimestepIRL):
     """
 
     def __init__(self, env_spec, expert_trajs=None,
-                 discrim_arch=relu_net(dout=15), # output dim 15 instead of 1
+                 discrim_arch=relu_net,  # output dim 15 instead of 1
                  discrim_arch_args={},
                  l2_reg=0,
                  discount=1.0,
@@ -412,12 +448,15 @@ class OTIRLStateAction(SingleTimestepIRL):
                 tf.float32, [None, 1], name='log_probs')
             self.lr = tf.placeholder(tf.float32, (), name='lr')
 
+            obs_act1 = tf.concat([self.obs_t, self.act_t], axis=1)
+            obs_act2 = tf.concat([self.obs_t2, self.act_t2], axis=1)
+
             with tf.variable_scope('discrim') as dvs:
                 with tf.variable_scope('energy'):
-                    self.fea_trans = discrim_arch(obs_act, **discrim_arch_args)
-
-                    self.energy = discrim_arch(obs_act, **discrim_arch_args)
-
+                    self.fea_trans1 = discrim_arch(
+                        obs_act1, **discrim_arch_args)
+                    self.fea_trans2 = discrim_arch(
+                        obs_act2, **discrim_arch_args)
 
             """
             obs_act = tf.concat([self.obs_t, self.act_t], axis=1)
@@ -445,32 +484,30 @@ class OTIRLStateAction(SingleTimestepIRL):
                                (1-self.labels)*(log_q_tau-log_pq))
             """
 
+            #import pdb
+            # pdb.set_trace()
 
             # compute the loss function
-            def cos_distance(fea_src, fea_tar)
-                fea_src = tf.nn.l2_normalize(fea_src, 2, epsilon=1e-12)
-                fea_tar = tf.nn.l2_normalize(fea_tar, 2, epsilon=1e-12)
+            def cos_distance(fea_src, fea_tar):
+                fea_src = tf.nn.l2_normalize(fea_src, 1, epsilon=1e-12)
+                fea_tar = tf.nn.l2_normalize(fea_tar, 1, epsilon=1e-12)
                 #fea_src = tf.transpose(fea_src, [1,0,2])
                 #fea_tar = tf.transpose(fea_tar, [1,0,2])
-                cosine_cost = 1 - tf.einsum('aij,ajk->aik', fea_src, tf.transpose(fea_tar, [0,2,1]))
+                cosine_cost = 1 - \
+                    tf.einsum('ij,jk->ik', fea_src,
+                              tf.transpose(fea_tar, [1, 0]))
+                return cosine_cost
 
-
-            obs_act1 = tf.concat([self.obs_t, self.act_t], axis=1)
-            obs_act2 = tf.concat([self.obs_t2, self.act_t2], axis=1)
-            C_mat = cos_distance(self.fea_trans(
-                obs_act1), self.fea_trans(obs_act2))
+            C_mat = cos_distance(self.fea_trans1, self.fea_trans2)
             #ot_loss = IPOT_distance(C_mat, n, m)
-            ot_loss = tf.reduce_mean(IPOT_distance2(C_mat)[0])
+            ot_loss = tf.reduce_mean(IPOT_distance(
+                C_mat, 1000, 1000)[0])  # 1000 batch size
 
             with tf.variable_scope('discrim') as dvs:
                 with tf.variable_scope('energy'):
-                    obs_act1 = tf.concat([self.obs_t, self.act_t], axis=1)
-                    obs_act2 = tf.concat([self.obs_t2, self.act_t2], axis=1)
-                    dummy, T = IPOT_distance2(C_mat)[0]
+                    dummy, T = IPOT_distance(C_mat, 1000, 1000)[0]
                     #  distance = tf.trace(tf.matmul(C, T, transpose_a=True))
-                    self.energy = dummy # replace in the future
-
-
+                    self.energy = dummy  # replace in the future
 
             self.loss = ot_loss
             self.step = tf.train.AdamOptimizer(
@@ -543,17 +580,19 @@ class OTIRLStateAction(SingleTimestepIRL):
         energy = -energy[:, 0]
         return self.unpack(energy, paths)
 
+
 class GAN_GCL(TrajectoryIRL):
     """
     Guided cost learning, GAN formulation with learned partition function
     See https://arxiv.org/pdf/1611.03852.pdf
     """
+
     def __init__(self, env_spec, expert_trajs=None,
                  discrim_arch=feedforward_energy,
                  discrim_arch_args={},
-                 l2_reg = 0,
-                 discount = 1.0,
-                 init_itrs = None,
+                 l2_reg=0,
+                 discount=1.0,
+                 init_itrs=None,
                  score_dtau=False,
                  state_only=False,
                  name='trajprior'):
@@ -566,9 +605,12 @@ class GAN_GCL(TrajectoryIRL):
         # build energy model
         with tf.variable_scope(name) as vs:
             # Should be batch_size x T x dO/dU
-            self.obs_t = tf.placeholder(tf.float32, [None, None, self.dO], name='obs')
-            self.act_t = tf.placeholder(tf.float32, [None, None, self.dU], name='act')
-            self.traj_logprobs = tf.placeholder(tf.float32, [None, None], name='traj_probs')
+            self.obs_t = tf.placeholder(
+                tf.float32, [None, None, self.dO], name='obs')
+            self.act_t = tf.placeholder(
+                tf.float32, [None, None, self.dU], name='act')
+            self.traj_logprobs = tf.placeholder(
+                tf.float32, [None, None], name='traj_probs')
             self.labels = tf.placeholder(tf.float32, [None, 1], name='labels')
             self.lr = tf.placeholder(tf.float32, (), name='lr')
 
@@ -579,41 +621,50 @@ class GAN_GCL(TrajectoryIRL):
 
             with tf.variable_scope('discrim') as vs2:
                 self.energy = discrim_arch(obs_act, **discrim_arch_args)
-                discrim_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=vs2.name)
+                discrim_vars = tf.get_collection(
+                    tf.GraphKeys.TRAINABLE_VARIABLES, scope=vs2.name)
 
             self.energy_timestep = self.energy
             # Don't train separate log Z because we can't fully separate it from the energy function
             if discount >= 1.0:
                 log_p_tau = tf.reduce_sum(-self.energy, axis=1)
             else:
-                log_p_tau = discounted_reduce_sum(-self.energy, discount=discount, axis=1)
-            log_q_tau = tf.reduce_sum(self.traj_logprobs, axis=1, keep_dims=True)
+                log_p_tau = discounted_reduce_sum(-self.energy,
+                                                  discount=discount, axis=1)
+            log_q_tau = tf.reduce_sum(
+                self.traj_logprobs, axis=1, keep_dims=True)
 
             # numerical stability trick
             log_pq = tf.reduce_logsumexp([log_p_tau, log_q_tau], axis=0)
             self.d_tau = tf.exp(log_p_tau-log_pq)
-            cent_loss = -tf.reduce_mean(self.labels*(log_p_tau-log_pq) + (1-self.labels)*(log_q_tau-log_pq))
+            cent_loss = - \
+                tf.reduce_mean(self.labels*(log_p_tau-log_pq) +
+                               (1-self.labels)*(log_q_tau-log_pq))
 
             if l2_reg > 0:
-                reg_loss = l2_reg*tf.reduce_sum([tf.reduce_sum(tf.square(var)) for var in discrim_vars])
+                reg_loss = l2_reg * \
+                    tf.reduce_sum([tf.reduce_sum(tf.square(var))
+                                   for var in discrim_vars])
             else:
                 reg_loss = 0
 
             #self.predictions = tf.nn.sigmoid(logits)
             self.loss = cent_loss + reg_loss
-            self.step = tf.train.AdamOptimizer(learning_rate=self.lr).minimize(self.loss)
+            self.step = tf.train.AdamOptimizer(
+                learning_rate=self.lr).minimize(self.loss)
             self._make_param_ops(vs)
 
     @property
     def score_trajectories(self):
         return False
 
-
-    def fit(self, paths, policy=None, batch_size=32, max_itrs=100, logger=None, lr=1e-3,**kwargs):
+    def fit(self, paths, policy=None, batch_size=32, max_itrs=100, logger=None, lr=1e-3, **kwargs):
         self._compute_path_probs(paths, insert=True)
         self.eval_expert_probs(self.expert_trajs, policy, insert=True)
-        obs, acts, path_probs = self.extract_paths(paths, keys=('observations', 'actions', 'a_logprobs'))
-        expert_obs, expert_acts, expert_probs = self.extract_paths(self.expert_trajs, keys=('observations', 'actions', 'a_logprobs'))
+        obs, acts, path_probs = self.extract_paths(
+            paths, keys=('observations', 'actions', 'a_logprobs'))
+        expert_obs, expert_acts, expert_probs = self.extract_paths(
+            self.expert_trajs, keys=('observations', 'actions', 'a_logprobs'))
 
         # Train discriminator
         for it in TrainingIterator(max_itrs, heartbeat=5):
@@ -621,14 +672,16 @@ class GAN_GCL(TrajectoryIRL):
                 self.sample_batch(obs, acts, path_probs, batch_size=batch_size)
 
             expert_obs_batch, expert_act_batch, expert_lprobs_batch = \
-                self.sample_batch(expert_obs, expert_acts, expert_probs, batch_size=batch_size)
+                self.sample_batch(expert_obs, expert_acts,
+                                  expert_probs, batch_size=batch_size)
             T = expert_obs_batch.shape[1]
 
             labels = np.zeros((batch_size*2, 1))
             labels[batch_size:] = 1.0
             obs_batch = np.concatenate([obs_batch, expert_obs_batch], axis=0)
             act_batch = np.concatenate([act_batch, expert_act_batch], axis=0)
-            lprobs_batch = np.concatenate([lprobs_batch, expert_lprobs_batch], axis=0)
+            lprobs_batch = np.concatenate(
+                [lprobs_batch, expert_lprobs_batch], axis=0)
 
             loss, _ = tf.get_default_session().run([self.loss, self.step], feed_dict={
                 self.act_t: act_batch,
@@ -660,8 +713,10 @@ class GAN_GCL(TrajectoryIRL):
                                                                    self.traj_logprobs: expert_probs})
             logger.record_tabular('IRLAverageExpertEnergy', np.mean(energy))
             #logger.record_tabular('GCLAverageExpertLogPtau', np.mean(-energy))
-            logger.record_tabular('IRLAverageExpertLogQtau', np.mean(expert_probs))
-            logger.record_tabular('IRLMedianExpertLogQtau', np.median(expert_probs))
+            logger.record_tabular(
+                'IRLAverageExpertLogQtau', np.mean(expert_probs))
+            logger.record_tabular('IRLMedianExpertLogQtau',
+                                  np.median(expert_probs))
             logger.record_tabular('IRLAverageExpertDtau', np.mean(dtau))
         return mean_loss
 
@@ -672,7 +727,6 @@ class GAN_GCL(TrajectoryIRL):
         obs, acts = self.extract_paths(paths)
 
         scores = tf.get_default_session().run(self.energy,
-                                          feed_dict={self.act_t: acts, self.obs_t: obs})
-        scores = -scores[:,:,0]
+                                              feed_dict={self.act_t: acts, self.obs_t: obs})
+        scores = -scores[:, :, 0]
         return scores
-

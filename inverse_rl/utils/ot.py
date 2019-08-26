@@ -57,7 +57,7 @@ def IPOT_np(C, beta=0.5):
 def IPOT_distance(C, n, m):
     T = IPOT(C, n, m)
     distance = tf.trace(tf.matmul(C, T, transpose_a=True))
-    return distance
+    return distance, T
 
 
 def shape_list(x):
