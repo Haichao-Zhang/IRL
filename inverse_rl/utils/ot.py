@@ -54,7 +54,8 @@ def IPOT_np(C, beta=0.5):
     return T
 
 
-def IPOT_distance(C, n, m):
+def IPOT_distance(C):
+    n, m = shape_list(C)  # b n m
     T = IPOT(C, n, m)
     distance = tf.trace(tf.matmul(C, T, transpose_a=True))
     return distance, T
@@ -78,17 +79,35 @@ def shape_list(x):
 
 
 def IPOT_distance2(C, beta=1, t_steps=10, k_steps=1):
-    b, n, m = shape_list(C)
-    sigma = tf.ones([b, m, 1]) / tf.cast(m, tf.float32)  # [b, m, 1]
-    T = tf.ones([b, n, m])
-    A = tf.exp(-C / beta)  # [b, n, m]
+    b, n = shape_list(C)  # b n m
+    sigma = tf.ones([b, 1]) / tf.cast(m, tf.float32)  # [b, 1]
+    T = tf.ones([b, n])
+    A = tf.exp(-C / beta)  # [b, n]
     for t in range(t_steps):
-        Q = A * T  # [b, n, m]
+        Q = A * T  # [b, n]
         for k in range(k_steps):
             delta = 1 / (tf.cast(n, tf.float32) *
-                         tf.matmul(Q, sigma))  # [b, n, 1]
+                         tf.matmul(Q, sigma))  # [b, n]
             sigma = 1 / (tf.cast(m, tf.float32) * tf.matmul(Q,
-                                                            delta, transpose_a=True))  # [b, m, 1]
-        T = delta * Q * tf.transpose(sigma, [0, 2, 1])  # [b, n, m]
+                                                            delta, transpose_a=True))  # [b,1]
+        T = delta * Q * sigma  # [b, n]
     distance = tf.trace(tf.matmul(C, T, transpose_a=True))
-    return distance, T
+    tmp = tf.matmul(tf.diag(tf.squeeze(delta)), Q)
+    T = tf.matmul(tmp, tf.diag(tf.squeeze(sigma)))
+
+
+# def IPOT_distance2(C, beta=1, t_steps=10, k_steps=1):
+#     b, n, m = shape_list(C)
+#     sigma = tf.ones([b, m, 1]) / tf.cast(m, tf.float32)  # [b, m, 1]
+#     T = tf.ones([b, n, m])
+#     A = tf.exp(-C / beta)  # [b, n, m]
+#     for t in range(t_steps):
+#         Q = A * T  # [b, n, m]
+#         for k in range(k_steps):
+#             delta = 1 / (tf.cast(n, tf.float32) *
+#                          tf.matmul(Q, sigma))  # [b, n, 1]
+#             sigma = 1 / (tf.cast(m, tf.float32) * tf.matmul(Q,
+#                                                             delta, transpose_a=True))  # [b, m, 1]
+#         T = delta * Q * tf.transpose(sigma, [0, 2, 1])  # [b, n, m]
+#     distance = tf.trace(tf.matmul(C, T, transpose_a=True))
+#     return distance, T

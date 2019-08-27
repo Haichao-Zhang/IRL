@@ -440,9 +440,9 @@ class OTIRLStateAction(SingleTimestepIRL):
             self.act_t = tf.placeholder(
                 tf.float32, [None, self.dU], name='act')
             self.obs_t2 = tf.placeholder(
-                tf.float32, [None, self.dO], name='obs')
+                tf.float32, [None, self.dO], name='obs2')
             self.act_t2 = tf.placeholder(
-                tf.float32, [None, self.dU], name='act')
+                tf.float32, [None, self.dU], name='act2')
             self.labels = tf.placeholder(tf.float32, [None, 1], name='labels')
             self.lprobs = tf.placeholder(
                 tf.float32, [None, 1], name='log_probs')
@@ -500,14 +500,18 @@ class OTIRLStateAction(SingleTimestepIRL):
 
             C_mat = cos_distance(self.fea_trans1, self.fea_trans2)
             #ot_loss = IPOT_distance(C_mat, n, m)
-            ot_loss = tf.reduce_mean(IPOT_distance(
-                C_mat, 1000, 1000)[0])  # 1000 batch size
+            ot_loss = tf.reduce_mean(IPOT_distance(C_mat)[
+                                     0])  # 1000 batch size
+            # ot_loss = tf.reduce_mean(IPOT_distance2(
+            #    C_mat)[0])  # 1000 batch size
 
             with tf.variable_scope('discrim') as dvs:
                 with tf.variable_scope('energy'):
-                    dummy, T = IPOT_distance(C_mat, 1000, 1000)[0]
-                    #  distance = tf.trace(tf.matmul(C, T, transpose_a=True))
-                    self.energy = dummy  # replace in the future
+                    dummy, T = IPOT_distance(C_mat)
+                    distance = tf.reduce_sum(
+                        tf.matmul(C_mat, T, transpose_a=True), 1)
+                    # self.energy = dummy  # replace in the future
+                    self.energy = distance  # replace in the future
 
             self.loss = ot_loss
             self.step = tf.train.AdamOptimizer(
@@ -534,14 +538,16 @@ class OTIRLStateAction(SingleTimestepIRL):
 
             labels = np.zeros((batch_size*2, 1))
             labels[batch_size:] = 1.0
-            obs_batch = np.concatenate([obs_batch, expert_obs_batch], axis=0)
-            act_batch = np.concatenate([act_batch, expert_act_batch], axis=0)
+            #obs_batch = np.concatenate([obs_batch, expert_obs_batch], axis=0)
+            #act_batch = np.concatenate([act_batch, expert_act_batch], axis=0)
             lprobs_batch = np.expand_dims(np.concatenate(
                 [lprobs_batch, expert_lprobs_batch], axis=0), axis=1).astype(np.float32)
 
             loss, _ = tf.get_default_session().run([self.loss, self.step], feed_dict={
                 self.act_t: act_batch,
                 self.obs_t: obs_batch,
+                self.act_t2: expert_act_batch,
+                self.obs_t2: expert_obs_batch,
                 self.labels: labels,
                 self.lprobs: lprobs_batch,
                 self.lr: lr
@@ -554,13 +560,19 @@ class OTIRLStateAction(SingleTimestepIRL):
                 print('\tLoss:%f' % mean_loss)
         if logger:
             energy = tf.get_default_session().run(self.energy,
-                                                  feed_dict={self.act_t: acts, self.obs_t: obs})
+                                                  feed_dict={self.act_t: acts,
+                                                             self.obs_t: obs,
+                                                             self.act_t2: expert_acts,
+                                                             self.obs_t2: expert_obs, })
             logger.record_tabular('IRLAverageEnergy', np.mean(energy))
             logger.record_tabular('IRLAverageLogQtau', np.mean(path_probs))
             logger.record_tabular('IRLMedianLogQtau', np.median(path_probs))
 
             energy = tf.get_default_session().run(self.energy,
-                                                  feed_dict={self.act_t: expert_acts, self.obs_t: expert_obs})
+                                                  feed_dict={self.act_t: expert_acts,
+                                                             self.obs_t: expert_obs,
+                                                             self.act_t2: expert_acts,
+                                                             self.obs_t2: expert_obs, })
             logger.record_tabular('IRLAverageExpertEnergy', np.mean(energy))
             #logger.record_tabular('GCLAverageExpertLogPtau', np.mean(-energy-logZ))
             logger.record_tabular(
@@ -573,11 +585,19 @@ class OTIRLStateAction(SingleTimestepIRL):
         """
         Return bonus
         """
-        obs, acts = self.extract_paths(paths)
+        #obs, acts = self.extract_paths(paths)
+
+        obs, acts, path_probs = self.extract_paths(
+            paths, keys=('observations', 'actions', 'a_logprobs'))
+        expert_obs, expert_acts, expert_probs = self.extract_paths(
+            self.expert_trajs, keys=('observations', 'actions', 'a_logprobs'))
 
         energy = tf.get_default_session().run(self.energy,
-                                              feed_dict={self.act_t: acts, self.obs_t: obs})
-        energy = -energy[:, 0]
+                                              feed_dict={self.act_t: acts,
+                                                         self.obs_t: obs,
+                                                         self.act_t2: expert_acts,
+                                                         self.obs_t2: expert_obs, })
+        energy = -energy
         return self.unpack(energy, paths)
 
 
