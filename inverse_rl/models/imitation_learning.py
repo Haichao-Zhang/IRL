@@ -513,7 +513,7 @@ class OTIRLStateAction(SingleTimestepIRL):
                     # self.energy = dummy  # replace in the future
                     self.energy = distance  # replace in the future
 
-            self.loss = ot_loss
+            self.loss = -ot_loss  # ot_loss should be maximized
             self.step = tf.train.AdamOptimizer(
                 learning_rate=self.lr).minimize(self.loss)
             self._make_param_ops(_vs)
